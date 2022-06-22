@@ -19,7 +19,7 @@ mongoClient.connect().then(() => {
 
 
 app.post("/participants", (req, res) => {
-    const { name } = req.body
+    const { name } = req.body;
 
     if(!name) return res.sendStatus(422);
 
@@ -50,7 +50,26 @@ app.get("/participants", (req, res) => {
 });
 
 app.post("/messages", (req, res) => {
-    res.send("OK");
+    const { to, text, type} = req.body;
+    const user = req.headers;
+
+    if(!to || !text || !type) return res.sendStatus(422);
+    if(type !== 'message' && type !== 'private_message') return res.sendStatus(422);
+
+    const find = db.collection("participants").findOne({name: user});
+    find.then(participant => {
+        if(!participant) return res.sendStatus(422);
+        else {
+            const message = db.collection("messages").insertOne({
+                from: user,
+                to: to,
+                text: text,
+                type: type,
+                time: dayjs().format('HH:MM:SS')
+            });
+            message.then(() => res.sendStatus(201));
+        }
+    });
 });
 
 app.get("/messages", (req, res) => {
