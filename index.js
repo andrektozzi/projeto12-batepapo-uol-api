@@ -73,7 +73,14 @@ app.post("/messages", (req, res) => {
 });
 
 app.get("/messages", (req, res) => {
-    res.send("OK");
+    const { limit } = req.query;
+    const { user } = req.headers;
+
+    const promise = db.collection("messages").find({}).toArray();
+    promise.then(messages => {
+        const limit_messages = messages.filter(value => value.type === "messages" || value.from === user || value.to === user || value.to === "Todos");
+        res.send((!limit) ? (limit_messages.reverse()) : (limit_messages.reverse().slice(0, limit)));
+    });
 });
 
 app.post("/status", (req, res) => {
