@@ -45,7 +45,8 @@ app.post("/participants", (req, res) => {
 });
 
 app.get("/participants", (req, res) => {
-    res.send("OK");
+    const promise = db.collection("participants").find({}).toArray();
+    promise.then(participants => res.send(participants));
 });
 
 app.post("/messages", (req, res) => {
