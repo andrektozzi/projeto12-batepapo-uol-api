@@ -70,58 +70,62 @@ app.post("/participants", async (req, res) => {
     }
   });
 
-app.post("/messages", async (req, res) => {
-    const { to, text, type} = req.body;
+  app.post("/messages", async (req, res) => {
+    const { to, text, type } = req.body;
     const from = req.header("user");
+  
     const validation = messageSchema.validate(req.body, {abortEarly: false});
-
-    if(validation.error){
+  
+    if (validation.error) {
+      return res.sendStatus(422);
+    }
+  
+    try {
+      const activeParticipant = await db.collection("participants").findOne({ name: from });
+  
+      if (!activeParticipant) {
         return res.sendStatus(422);
-    }
-
-   try {
-    const activeParticipant = await db.collection("participants").findOne({ name: from });
-    if (!activeParticipant){
-        res.sendStatus(422);
-    }
-
-    await db.collection("messages").insertOne({
+      }
+  
+      await db.collection("messages").insertOne({
         from,
         to,
         text,
         type,
-        time: dayjs().format("HH:mm:ss")
-    });
-    res.sendStatus(201);
-   } catch (error) {
-    res.sendStatus(500);
-   }
-});
-
-app.get("/messages", async (req, res) => {
+        time: dayjs().format("HH:mm:ss"),
+      });
+      res.sendStatus(201);
+    } catch (error) {
+      res.sendStatus(500);
+    }
+  });
+  
+  app.get("/messages", async (req, res) => {
     const limit = parseInt(req.query.limit);
     const user = req.header("user");
-
+  
     try {
-        const messages = await db.collection("messages").find({}).toArray();
-        const filterMessages = messages.filter((message) => {
-            const { from, to, type } = message;
-            if(to === "Todos" || to === user || from === user){
-                return true;
-            } else if(type === "message" || type === "status"){
-                return true;
-            }
-        });
-        
-        if(limit){
-            const limitMessages = filterMessages.slice(-limit);
-            return res.send(limitMessages);
+      const messages = await db.collection("messages").find({}).toArray();  
+      const filterMessages = messages.filter((message) => {
+        const { from, to, type } = message;
+  
+        if(to === user || from === user || to === "Todos"){
+            return true;
+        } else if(type === "status" || type === "message"){
+            return true;
         }
-        res.send(filterMessages);
+      });
+  
+      if (limit) {
+        const limitedMessages = filterMessages.slice(-limit);
+        return res.send(limitedMessages);
+      }
+  
+      res.send(filterMessages);
     } catch (error) {
-        res.sendStatus(500);
+      res.sendStatus(500);
     }
-});
+  });
 
 app.post("/status", (req, res) => {
     const { user } = req.header;    
