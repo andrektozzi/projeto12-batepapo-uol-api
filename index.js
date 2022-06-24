@@ -127,36 +127,47 @@ app.post("/participants", async (req, res) => {
     }
   });
 
-app.post("/status", (req, res) => {
-    const { user } = req.header;    
+app.post("/status", async (req, res) => {
+    const name = req.header("user");    
 
-    const find = db.collection("participants").findOne({name: user});
-    find.then(participant => {
-        if(!participant) return res.sendStatus(404);
-        else{
-            const status = db.collection("participants").updateOne({name: user}, {$set: {lastStatus: Date.now()}});
-            status.then(() => res.sendStatus(200));
+    try {
+        const activeParticipant = await db.collection("participants").findOne({ name: name});
+
+        if(!activeParticipant){
+            return res.sendStatus(404);
         }
-    });
+
+        await db.collection("users").updateOne({ name: name}, { $set: { lastStatus: Date.now() }});
+        res.sendStatus(200);
+    } catch (error) {
+        res.sendStatus(500);
+    }
 });
 
-setInterval(() => {
-    const time = Date.now();
-    const promise = db.collection("participants").find({}).toArray();
-    promise.then(participants => {
-        const inactive = participants.filter((participant) => (time - participant.lastStatus) > 10000);
-        inactive.forEach((participant) => {
-            const message = db.collection("messages").insertOne({
-                from: participant.name,
-                to: 'Todos',
-                text: 'sai da sala...',
-                type: 'status',
-                time: dayjs().format('HH:MM:SS')
-            });
-            //message.then(() => res.sendStatus(200));
-            db.collection("participants").deleteOne({name: participant.name});
-       });
-    });
+setInterval(async () => {
+    
+    try {
+        const time = Date.now();
+        const participants = await db.collection("participants").find({}).toArray();
+
+        participants.map( async (participant) => {
+            const { name, lastStatus } = participant;
+
+            if(time - lastStatus > 10000){
+                await db.collection("participants").deleteOne({ name });
+                await db.collection("messages").insertOne({
+                    from: name,
+                    to: "Todos",
+                    text: "sai da sala...",
+                    type: "status",
+                    time: dayjs().format("HH:mm:ss")
+                });
+                return console.log("Usuário inativo");
+            }
+        });
+    } catch (error) {
+        console.log("Erro ao deletar o usuário");
+    }
 }, 15000);
 
-app.listen(5000);
+app.listen(5000, () => console.log("Servidor rodando!!!"));
