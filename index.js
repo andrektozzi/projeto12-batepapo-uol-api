@@ -3,6 +3,7 @@ import cors from 'cors';
 import dayjs from 'dayjs';
 import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
+import joi from 'joi';
 
 const app = express();
 app.use(express.json());
@@ -17,6 +18,15 @@ mongoClient.connect().then(() => {
     db = mongoClient.db("bate-papo-uol");
 })
 
+const participantSchema = joi.object({
+    name: joi.string().required()
+});
+
+const messageSchema = joi.object({
+    to: joi.string().required(),
+    text: joi.string().required(),
+    type: joi.string().valid("message", "private_message").required()
+});
 
 app.post("/participants", async (req, res) => {
     const { name } = req.body;
