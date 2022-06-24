@@ -29,67 +29,98 @@ const messageSchema = joi.object({
 });
 
 app.post("/participants", async (req, res) => {
-    const { name } = req.body;
-
+    const { name } = req.body;  
+    const validation = participantSchema.validate({ name });
+  
+    if (validation.error) {
+      return res.sendStatus(422);
+    }
+  
     try {
-       await db.collection("participants").insertOne({
+      const activeParticipant = await db.collection("participants").findOne({ name: name });
+  
+      if (activeParticipant) {
+        return res.sendStatus(409);
+      }
+  
+      await db.collection("participants").insertOne({
         name: name,
-        lastStatus: Date.now()
-       });
-       await db.collection("messages").insertOne({
+        lastStatus: Date.now(),
+      });
+  
+      await db.collection("messages").insertOne({
         from: name,
         to: "Todos",
         text: "entra na sala...",
-        type:"status",
-        time: dayjs().format("HH:mm:ss")
-       });
-       res.sendStatus(201);
+        type: "status",
+        time: dayjs().format("HH:mm:ss"),
+      });  
+      res.sendStatus(201);
     } catch (error) {
-        res.sendStatus(409);
+      res.sendStatus(500);
     }
+  });
+  
+  app.get("/participants", async (_, res) => {
+    try {
+      const users = await db.collection("participants").find({}).toArray();
+      res.send(users);
+    } catch (error) {
+      res.sendStatus(500);
+    }
+  });
+
+app.post("/messages", async (req, res) => {
+    const { to, text, type} = req.body;
+    const from = req.header("user");
+    const validation = messageSchema.validate(req.body, {abortEarly: false});
+
+    if(validation.error){
+        return res.sendStatus(422);
+    }
+
+   try {
+    const activeParticipant = await db.collection("participants").findOne({ name: from });
+    if (!activeParticipant){
+        res.sendStatus(422);
+    }
+
+    await db.collection("messages").insertOne({
+        from,
+        to,
+        text,
+        type,
+        time: dayjs().format("HH:mm:ss")
+    });
+    res.sendStatus(201);
+   } catch (error) {
+    res.sendStatus(500);
+   }
 });
 
-app.get("/participants", async (req, res) => {
+app.get("/messages", async (req, res) => {
+    const limit = parseInt(req.query.limit);
+    const user = req.header("user");
+
     try {
-        const participants = await db.collection("participants").find({}).toArray();
-        res.send(participants);
+        const messages = await db.collection("messages").find({}).toArray();
+        const filterMessages = messages.filter((message) => {
+            const { from, to, type } = message;
+            if(to === "Todos" || to === user || from === user){
+                return true;
+            } else if(type === "message" || type === "status"){
+                return true;
+            }
+        });
+        
+        if(limit){
+            const limitMessages = filterMessages.slice(-limit);
+            return res.send(limitMessages);
+        }
+        res.send(filterMessages);
     } catch (error) {
         res.sendStatus(500);
     }
-});
-
-app.post("/messages", (req, res) => {
-    const { to, text, type} = req.body;
-    const user = req.headers;
-
-    if(!to || !text || !type) return res.sendStatus(422);
-    if(type !== 'message' && type !== 'private_message') return res.sendStatus(422);
-
-    const find = db.collection("participants").findOne({name: user});
-    find.then(participant => {
-        if(!participant) return res.sendStatus(422);
-        else {
-            const message = db.collection("messages").insertOne({
-                from: user,
-                to: to,
-                text: text,
-                type: type,
-                time: dayjs().format('HH:MM:SS')
-            });
-            message.then(() => res.sendStatus(201));
-        }
-    });
-});
-
-app.get("/messages", (req, res) => {
-    const { limit } = req.query;
-    const { user } = req.headers;
-
-    const promise = db.collection("messages").find({}).toArray();
-    promise.then(messages => {
-        const limit_messages = messages.filter(value => value.type === "messages" || value.from === user || value.to === user || value.to === "Todos");
-        res.send((!limit) ? (limit_messages.reverse()) : (limit_messages.reverse().slice(0, limit)));
-    });
 });
 
 app.post("/status", (req, res) => {
@@ -118,7 +149,7 @@ setInterval(() => {
                 type: 'status',
                 time: dayjs().format('HH:MM:SS')
             });
-            message.then(() => res.sendStatus(200));
+            //message.then(() => res.sendStatus(200));
             db.collection("participants").deleteOne({name: participant.name});
        });
     });
