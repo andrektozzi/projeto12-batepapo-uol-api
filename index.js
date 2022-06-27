@@ -170,4 +170,4 @@ setInterval(async () => {
     }
 }, 15000);
 
-app.listen(5000, () => console.log("Servidor rodando!!!"));
+app.listen(5000);
